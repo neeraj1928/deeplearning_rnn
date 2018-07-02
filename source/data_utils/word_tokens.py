@@ -7,23 +7,31 @@ import re
 import pickle
 import ast
 
+import numpy as np
+
 from source.config.constants import *
+
+
+class Config():
+    data_dir = DATA_DIR
+    vocab_size = VOCABULARY_SIZE
+    min_freq = MIN_FREQ
 
 
 class CreateWordTokens():
 
-    def __init__(self, base_dir):
-        self.base_dir = base_dir
+    def __init__(self):
+        self.config = Config()
         self.paths = self.get_files()
         # replace all non alphanumeric with white spaces
         self.reg = re.compile(r'[\W]+')
 
     def get_files(self):
-        item_list = os.listdir(self.base_dir)
+        item_list = os.listdir(self.config.data_dir)
 
         file_list = []
         for item in item_list:
-            item_dir = os.path.join(self.base_dir, item)
+            item_dir = os.path.join(self.config.data_dir, item)
             if not os.path.isdir(item_dir):
                 file_list.append(item_dir)
         return file_list
@@ -51,9 +59,9 @@ class CreateWordTokens():
                     else:
                         tokenfreq[w] += 1
 
-        tokens["UNK"] = idx
-        revtokens += ["UNK"]
-        tokenfreq["UNK"] = 1
+        tokens[UNK] = idx
+        revtokens += [UNK]
+        tokenfreq[UNK] = 1
         wordcount += 1
 
         self._tokens = tokens
@@ -63,37 +71,69 @@ class CreateWordTokens():
 
         return self._tokens
 
+    def create_req_vocab_tokens(self):
+        tokens = dict()
+        tokenfreq = dict()
+        wordcount = 0
+        revtokens = []
+        idx = 0
+        s_token_freq = sorted(
+            self._tokenfreq.items(), key=lambda kv: kv[1], reverse=True)
+        for word, freq in s_token_freq:
+            if np.log10(freq) > self.config.min_freq:
+                tokens[word] = idx
+                tokenfreq[word] = freq
+                wordcount += 1
+                revtokens.append(word)
+            else:
+                break
+            idx += 1
+        tokens[UNK] = idx + 1
+        revtokens += [UNK]
+        tokenfreq[UNK] = 1
+        wordcount += 1
+
+        self.tokens = tokens
+        self.tokenfreq = tokenfreq
+        self.wordcount = wordcount
+        self.revtokens = revtokens
+
     def save_req_data(self):
         """
             save data required inside base_dir/pickles
         """
         required_obj = {
-            TOKENS: self._tokens,
-            TOKENFREQ: self._tokenfreq,
-            WORDCOUNT: self._wordcount,
-            REVTOKENS: self._revtokens}
-        if not os.path.isdir("{}/pickles".format(self.base_dir)):
-            os.makedirs("{}/pickles".format(self.base_dir))
+            TOKENS: self.tokens,
+            TOKENFREQ: self.tokenfreq,
+            WORDCOUNT: self.wordcount,
+            REVTOKENS: self.revtokens}
+        if not os.path.isdir("{}/pickles".format(self.config.data_dir)):
+            os.makedirs("{}/pickles".format(self.config.data_dir))
         for name, obj in required_obj.items():
             pickle.dump(obj, open(
-                "{}/pickles/{}".format(self.base_dir, name), 'wb'))
+                "{}/pickles/{}".format(self.config.data_dir, name), 'wb'))
 
     def load_req_data(self):
         """
             save data required inside base_dir/pickles
         """
-        if not os.path.isdir("{}/pickles".format(self.base_dir)):
+        if not os.path.isdir("{}pickles".format(self.config.data_dir)):
             self.create_tokens()
             self.save_req_data()
 
         self._tokens = pickle.load(
-            open("{}/pickles/{}".format(self.base_dir, TOKENS), 'rb'))
+            open("{}/pickles/{}".format(
+                self.config.data_dir, TOKENS), 'rb'))
         self._tokenfreq = pickle.load(
-            open("{}/pickles/{}".format(self.base_dir, TOKENFREQ), 'rb'))
+            open("{}/pickles/{}".format(
+                self.config.data_dir, TOKENFREQ), 'rb'))
         self._wordcount = pickle.load(
-            open("{}/pickles/{}".format(self.base_dir, WORDCOUNT), 'rb'))
+            open("{}/pickles/{}".format(
+                self.config.data_dir, WORDCOUNT), 'rb'))
         self._revtokens = pickle.load(
-            open("{}/pickles/{}".format(self.base_dir, REVTOKENS), 'rb'))
+            open("{}/pickles/{}".format(
+                self.config.data_dir, REVTOKENS), 'rb'))
+        self.create_req_vocab_tokens()
 
     def read_sentences(self):
         """
