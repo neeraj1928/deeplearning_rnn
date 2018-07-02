@@ -14,12 +14,14 @@ class Config():
     negative_samples = NUM_NEGATIVE_SAMPLES
     epochs = 15
     batch_size = BATCH_SIZE
-    window_size = 5
+    window_size = SKIP_WINDOW_SIZE
     valid_size = 16  # Random set of words to evaluate similarity on.
     valid_window = 100
     dropout = 0.9
     checkpoint_dir = CKP_WORD2VEC_DIR
     lr = 0.5
+    loss_iteration = LOSS_ITERATION
+    word_validation_iteration = WORD_VALIDATION_ITERATION
 
 
 class Word2Vec():
@@ -62,12 +64,9 @@ class Word2Vec():
         return indexes
 
     def get_batches(self):
-        ''' Create a generator of word batches as a tuple (inputs, targets) '''
-
-        # n_batches = VOCABULARY_SIZE//batch_size
-
-        # only full batches
-        # words = words[:n_batches*batch_size]
+        '''
+            Create a generator of word batches as a tuple (inputs, targets)
+        '''
         num_words = 0
         for sentences in self.word_tokens.read_sentences():
             x = np.zeros(shape=(self.config.batch_size), dtype=np.int32)
@@ -100,15 +99,6 @@ class Word2Vec():
                         num_words = 0
                         continue
                     num_words += len(batch_y)
-        # for idx in range(0, len(words), batch_size):
-        #     x, y = [], []
-        #     batch = words[idx:idx+batch_size]
-        #     for ii in range(len(batch)):
-        #         batch_x = batch[ii]
-        #         batch_y = get_target(batch, ii, window_size)
-        #         y.extend(batch_y)
-        #         x.extend([batch_x]*len(batch_y))
-        #     yield x, y
 
     def placeholder(self):
         with self.train_graph.as_default():
@@ -140,7 +130,7 @@ class Word2Vec():
     def batch_norm(self):
         with self.train_graph.as_default():
             norm = tf.sqrt(
-                tf.reduce_sum(tf.square(self.embedding), 1, keep_dims=True))
+                tf.reduce_sum(tf.square(self.embedding), 1, keepdims=True))
             self.embedding = self.embedding / norm
 
     def model(self):
@@ -220,17 +210,19 @@ class Word2Vec():
 
                     loss += train_loss
 
-                    if iteration % 10000 == 0:
+                    if iteration % self.config.loss_iteration == 0:
                         end = time.time()
                         print("Epoch {}/{}".format(
                             global_step, self.config.epochs),
                               "Iteration: {}".format(iteration),
-                              "Avg. Training loss: {:.4f}".format(loss/10000),
-                              "{:.4f} sec/batch".format((end-start)/10000))
+                              "Avg. Training loss: {:.4f}".format(
+                                  loss/self.config.loss_iteration),
+                              "{:.4f} sec/loss_iteration".format(
+                                  (end-start)/self.config.loss_iteration))
                         loss = 0
                         start = time.time()
 
-                    if iteration % 100000 == 0:
+                    if iteration % self.config.word_validation_iteration == 0:
                         # TODO: not very cleasr
                         # note that this is expensive
                         sim = self.similarity.eval()

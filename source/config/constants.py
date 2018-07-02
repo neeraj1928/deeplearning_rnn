@@ -27,8 +27,15 @@ VOCABULARY_SIZE = 386198
 
 MIN_FREQ = 1.39
 
+# print loss after this many iterations
+LOSS_ITERATION = 10000
+
+# print word2vec validation after this many iterations
+# this causes extra delay, since it compare words
+WORD_VALIDATION_ITERATION = 100000
+
 # window size
-SKIP_WINDOW_SIZE = 2
+SKIP_WINDOW_SIZE = 5
 
 # number of negative samples
 NUM_NEGATIVE_SAMPLES = 500
