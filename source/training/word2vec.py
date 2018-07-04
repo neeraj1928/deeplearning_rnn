@@ -19,7 +19,7 @@ class Config():
     valid_window = 100
     dropout = 0.9
     checkpoint_dir = CKP_WORD2VEC_DIR
-    lr = 0.5
+    lr = 0.01
     loss_iteration = LOSS_ITERATION
     word_validation_iteration = WORD_VALIDATION_ITERATION
 
@@ -68,6 +68,7 @@ class Word2Vec():
             Create a generator of word batches as a tuple (inputs, targets)
         '''
         num_words = 0
+        start = time.time()
         for sentences in self.word_tokens.read_sentences():
             x = np.zeros(shape=(self.config.batch_size), dtype=np.int32)
             y = np.zeros(shape=(self.config.batch_size, 1), dtype=np.int32)
@@ -91,6 +92,9 @@ class Word2Vec():
                                 [batch_x] * remaining
                             y[num_words: num_words + remaining, 0] = \
                                 batch_y[:remaining]
+                        print("time spent only in batch generation: {}".format(
+                            time.time() - start))
+                        start = time.time()
                         yield x, y
                         x = np.zeros(
                             shape=(self.config.batch_size), dtype=np.int32)
@@ -99,6 +103,7 @@ class Word2Vec():
                         num_words = 0
                         continue
                     num_words += len(batch_y)
+            yield x[: num_words], y[: num_words, 0]
 
     def placeholder(self):
         with self.train_graph.as_default():
@@ -161,7 +166,8 @@ class Word2Vec():
 
     def optimization(self):
         with self.train_graph.as_default():
-            self.optimizer = tf.train.AdamOptimizer().minimize(self.cost)
+            self.optimizer = tf.train.AdamOptimizer(
+                self.config.lr).minimize(self.cost)
 
     def validate(self):
         with self.train_graph.as_default():
@@ -218,9 +224,18 @@ class Word2Vec():
                               "Avg. Training loss: {:.4f}".format(
                                   loss/self.config.loss_iteration),
                               "{:.4f} sec/loss_iteration".format(
-                                  (end-start)/self.config.loss_iteration))
+                                  (end-start)))
                         loss = 0
                         start = time.time()
+                        # adding batch norm after self.config.loss_iteration
+                        # number of iterations
+                        norm = tf.sqrt(
+                            tf.reduce_sum(
+                                tf.square(self.embedding), 1, keepdims=True))
+                        self.embedding = self.embedding / norm
+                        save_path = self.saver.save(
+                            sess, self.config.checkpoint_dir,
+                            "{}_{}".format(global_step, iteration))
 
                     if iteration % self.config.word_validation_iteration == 0:
                         # TODO: not very cleasr
@@ -238,10 +253,11 @@ class Word2Vec():
                                 log = '{} {},'.format(log, close_word)
                             print(log)
                     iteration += 1
-                # sess.run(self.batch_norm())
-                # do batch normalization
+                    # sess.run(self.batch_norm())
+                    # do batch normalization
                 norm = tf.sqrt(
-                    tf.reduce_sum(tf.square(self.embedding), 1, keepdims=True))
+                    tf.reduce_sum(
+                        tf.square(self.embedding), 1, keepdims=True))
                 self.embedding = self.embedding / norm
                 save_path = self.saver.save(
                     sess, self.config.checkpoint_dir, global_step)
