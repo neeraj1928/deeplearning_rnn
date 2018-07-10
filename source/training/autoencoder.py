@@ -14,7 +14,7 @@ class Config():
     summary_dir = SUMM_AUTO_ENC
     dropout = 0.4  # keep probability = 0.6
     batch_size = BATCH_SIZE
-    # number of neurons in hidden cell
+    # number of neurons in hidden cells
     num_hidden_1 = 256
     num_hidden_2 = 128
     # this thing can be evaluated using
