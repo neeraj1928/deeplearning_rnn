@@ -17,7 +17,7 @@ class Config():
     window_size = SKIP_WINDOW_SIZE
     valid_size = 16  # Random set of words to evaluate similarity on.
     valid_window = 100
-    dropout = 0.9
+    dropout = 0.4  # keep probability = 0.6
     checkpoint_dir = CKP_WORD2VEC_DIR
     lr = 0.01
     loss_iteration = LOSS_ITERATION
@@ -38,10 +38,9 @@ class Word2Vec():
         self.run_opts = tf.RunOptions(report_tensor_allocations_upon_oom=True)
 
     def get_words_to_indexes(self, words):
-        indexes = []
-        [indexes.append(self.word_tokens.tokens.get(
+        indexes = [indexes.append(self.word_tokens.tokens.get(
             word, self.word_tokens.tokens[UNK]
-        ))]
+        )) for word in words]
         # for word in words:
         #     if np.floor(np.log10(
         #             self.word_tokens.tokenfreq.get(word, 1))) > 2:
@@ -103,7 +102,7 @@ class Word2Vec():
                         num_words = 0
                         continue
                     num_words += len(batch_y)
-            yield x[: num_words], y[: num_words, 0]
+            yield x[: num_words], y[: num_words, 0:1]
 
     def placeholder(self):
         with self.train_graph.as_default():
@@ -124,13 +123,15 @@ class Word2Vec():
     def embedding(self):
         with self.train_graph.as_default():
             with tf.device('/cpu:0'):
-                self.embedding = tf.Variable(
-                    tf.random_uniform(
-                        (self.config.vocabulary_size,
-                         self.config.embedding_size), -1, 1))
-                # use tf.nn.embedding_lookup to get the hidden layer output
-                self.embed = tf.nn.embedding_lookup(
-                    self.embedding, self.inputs)
+                with tf.variable_scope("embedding"):
+                    self.embedding = tf.Variable(
+                        tf.random_uniform(
+                            (self.config.vocabulary_size,
+                             self.config.embedding_size), -1, 1))
+                    self.variable_summaries(self.embedding)
+                    # use tf.nn.embedding_lookup to get the hidden layer output
+                    self.embed = tf.nn.embedding_lookup(
+                        self.embedding, self.inputs)
 
     def batch_norm(self):
         with self.train_graph.as_default():
@@ -140,13 +141,20 @@ class Word2Vec():
 
     def model(self):
         with self.train_graph.as_default():
-            # create softmax weight matrix here
-            self.softmax_w = tf.Variable(
-                tf.truncated_normal(
-                    (self.config.vocabulary_size, self.config.embedding_size)))
-            # create softmax biases here
-            self.softmax_b = tf.Variable(
-                tf.zeros(self.config.vocabulary_size), name="softmax_bias")
+            with tf.variable_scope("projection"):
+                with tf.variable_scope("weights"):
+                    # create softmax weight matrix here
+                    self.softmax_w = tf.Variable(
+                        tf.truncated_normal(
+                            (self.config.vocabulary_size,
+                             self.config.embedding_size)))
+                    self.variable_summaries(self.softmax_w)
+                with tf.variable_scope("biases"):
+                    # create softmax biases here
+                    self.softmax_b = tf.Variable(
+                        tf.zeros(self.config.vocabulary_size),
+                        name="softmax_bias")
+                    self.variable_summaries(self.softmax_b)
 
     def calc_loss(self):
         # Calculate the loss using negative sampling
@@ -168,6 +176,22 @@ class Word2Vec():
         with self.train_graph.as_default():
             self.optimizer = tf.train.AdamOptimizer(
                 self.config.lr).minimize(self.cost)
+
+    def variable_summaries(self, var):
+        """
+            Attach a lot of summaries to a Tensor
+            (for TensorBoard visualization).
+        """
+        with self.train_graph.as_default():
+            with tf.variable_scope('summaries'):
+                mean = tf.reduce_mean(var)
+                tf.summary.scalar('mean', mean)
+                with tf.variable_scope('stddev'):
+                    stddev = tf.sqrt(tf.reduce_mean(tf.square(var - mean)))
+                    tf.summary.scalar('stddev', stddev)
+                    tf.summary.scalar('max', tf.reduce_max(var))
+                    tf.summary.scalar('min', tf.reduce_min(var))
+                    tf.summary.histogram('histogram', var)
 
     def validate(self):
         with self.train_graph.as_default():
@@ -222,7 +246,7 @@ class Word2Vec():
                             global_step, self.config.epochs),
                               "Iteration: {}".format(iteration),
                               "Avg. Training loss: {:.4f}".format(
-                                  loss/self.config.loss_iteration),
+                                  loss),
                               "{:.4f} sec/loss_iteration".format(
                                   (end-start)))
                         loss = 0
@@ -235,7 +259,7 @@ class Word2Vec():
                         self.embedding = self.embedding / norm
                         save_path = self.saver.save(
                             sess, self.config.checkpoint_dir,
-                            "{}_{}".format(global_step, iteration))
+                            int("{}{}".format(global_step, iteration)))
 
                     if iteration % self.config.word_validation_iteration == 0:
                         # TODO: not very cleasr
@@ -260,7 +284,8 @@ class Word2Vec():
                         tf.square(self.embedding), 1, keepdims=True))
                 self.embedding = self.embedding / norm
                 save_path = self.saver.save(
-                    sess, self.config.checkpoint_dir, global_step)
+                    sess, self.config.checkpoint_dir,
+                    int("{}{}".format(global_step, iteration)))
 
     def run_model(self):
         # import pdb; pdb.set_trace()

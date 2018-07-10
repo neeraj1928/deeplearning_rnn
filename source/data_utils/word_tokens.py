@@ -88,30 +88,41 @@ class CreateWordTokens():
             else:
                 break
             idx += 1
-        tokens[UNK] = idx + 1
-        revtokens += [UNK]
-        tokenfreq[UNK] = 1
-        wordcount += 1
+
+        # adding 3 helper tokens
+        helper_tokens = [UNK, SOS, EOS]
+        for h_token in helper_tokens:
+            tokens[h_token] = idx
+            revtokens += [h_token]
+            tokenfreq[h_token] = 1
+            wordcount += 1
+            idx += 1
 
         self.tokens = tokens
         self.tokenfreq = tokenfreq
         self.wordcount = wordcount
         self.revtokens = revtokens
 
-    def save_req_data(self):
+    def save_req_data(self, tokens, tokenfreq,
+                      wordcount, revtokens, is_all=False):
         """
             save data required inside base_dir/pickles
+            @param is_all: whether full vocabulary is used
+                or some part of it
         """
+        name_prefix = "_" if is_all else "{}_".format(
+            self.config.vocab_size)
         required_obj = {
-            TOKENS: self.tokens,
-            TOKENFREQ: self.tokenfreq,
-            WORDCOUNT: self.wordcount,
-            REVTOKENS: self.revtokens}
-        if not os.path.isdir("{}/pickles".format(self.config.data_dir)):
-            os.makedirs("{}/pickles".format(self.config.data_dir))
+            TOKENS: tokens,
+            TOKENFREQ: tokenfreq,
+            WORDCOUNT: wordcount,
+            REVTOKENS: revtokens}
+        if not os.path.isdir("{}pickles".format(self.config.data_dir)):
+            os.makedirs("{}pickles".format(self.config.data_dir))
         for name, obj in required_obj.items():
             pickle.dump(obj, open(
-                "{}/pickles/{}".format(self.config.data_dir, name), 'wb'))
+                "{}pickles/{}{}".format(self.config.data_dir,
+                                        name_prefix, name), 'wb'))
 
     def load_req_data(self):
         """
@@ -119,21 +130,26 @@ class CreateWordTokens():
         """
         if not os.path.isdir("{}pickles".format(self.config.data_dir)):
             self.create_tokens()
-            self.save_req_data()
+            self.save_req_data(
+                self._tokens, self._tokenfreq,
+                self._wordcount, self._revtokens, True)
 
         self._tokens = pickle.load(
-            open("{}/pickles/{}".format(
+            open("{}/pickles/_{}".format(
                 self.config.data_dir, TOKENS), 'rb'))
         self._tokenfreq = pickle.load(
-            open("{}/pickles/{}".format(
+            open("{}/pickles/_{}".format(
                 self.config.data_dir, TOKENFREQ), 'rb'))
         self._wordcount = pickle.load(
-            open("{}/pickles/{}".format(
+            open("{}/pickles/_{}".format(
                 self.config.data_dir, WORDCOUNT), 'rb'))
         self._revtokens = pickle.load(
-            open("{}/pickles/{}".format(
+            open("{}/pickles/_{}".format(
                 self.config.data_dir, REVTOKENS), 'rb'))
         self.create_req_vocab_tokens()
+        self.save_req_data(
+            self.tokens, self.tokenfreq,
+            self.wordcount, self.revtokens, False)
 
     def read_sentences(self):
         """
