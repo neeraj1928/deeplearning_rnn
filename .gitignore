@@ -1,4 +1,8 @@
 *.pyc
 data/
 main_data/
-notebooks
+notebooks/
+log/
+checkpoint/
+__pycache__/
+*.py[cod]
