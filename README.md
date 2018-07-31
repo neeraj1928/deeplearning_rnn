@@ -6,4 +6,5 @@ To implement variational inferences, tensorflow probability is used.
 For building model and computation tensorflow is used.
 All code is written in python
 
+# Current Status
 Currently this is a work in progress and if anyone has faced any issues while implementing these, they can mention in comments and we will try to address those issues.
